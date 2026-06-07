@@ -85,9 +85,9 @@
 <details>
 <summary><strong>Chrome просит войти в аккаунт при первом запуске</strong></summary>
 
-Нажмите **«Продолжить без входа»** — аккаунт Google не нужен, программа работает без него:
+Нажмите **«Не входить»** — аккаунт Google не нужен, программа работает без него:
 
-<a href="first-run-dialog.png" target="_blank"><img src="first-run-dialog.png" width="400" alt="Продолжить без входа"></a>
+<a href="first-run-dialog.png" target="_blank"><img src="first-run-dialog.png" width="400" alt="Не входить"></a>
 </details>
 
 ## 🛠 Сборка из исходников
