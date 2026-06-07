@@ -1,0 +1,25 @@
+# Результаты
+grades.xlsx
+marks_api_response.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Логи
+export_marks_*.log
+
+# Профиль Chrome (создаётся при запуске)
+chrome-profile/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
