@@ -13,10 +13,11 @@ dist/
 *.spec
 
 # Логи
-export_marks_*.log
+dnevnik-mesh-export_*.log
 
 # Профиль Chrome (создаётся при запуске)
-chrome-profile/
+chrome-profile/*
+!chrome-profile/.gitkeep
 
 # IDE
 .vscode/

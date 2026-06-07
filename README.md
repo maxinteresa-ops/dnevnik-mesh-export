@@ -5,7 +5,7 @@
 ![Windows 11](https://img.shields.io/badge/Windows_11-✓-00a4ef?logo=windows)
 ![Python](https://img.shields.io/badge/Python-3.7%2B-3776AB?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Release](https://img.shields.io/github/v/release/khakimzyanovt/mesh-marks-exporter)
+![Release](https://img.shields.io/github/v/release/maxinteresa-ops/dnevnik-mesh-export)
 
 Автоматический сбор всех оценок из электронного дневника **school.mos.ru (МЭШ)**  
 в файл Excel с удобной сводкой по предметам.
@@ -27,11 +27,11 @@
 
 **1. Скачайте программу**
 
-▶️ [Скачать последнюю версию](https://github.com/khakimzyanovt/mesh-marks-exporter/releases/latest)
+▶️ [Скачать последнюю версию](https://github.com/maxinteresa-ops/dnevnik-mesh-export/releases/latest)
 
 **2. Запустите**
 
-Просто дважды кликните `export_marks.exe`. Программа сама:
+Просто дважды кликните `dnevnik-mesh-export.exe`. Программа сама:
 - Запустит Chrome со страницей МЭШ
 - Будет ждать вашего входа в аккаунт
 - Как только вы авторизуетесь — начнёт сбор
@@ -54,7 +54,7 @@
 |---|---|
 | `grades.xlsx` | **Результат** — таблица с оценками + сводка |
 | `chrome-profile/` | Профиль Chrome (создаётся при первом запуске) |
-| `export_marks_*.log` | Лог ошибок (если что-то пошло не так) |
+| `dnevnik-mesh-export_*.log` | Лог ошибок (если что-то пошло не так) |
 
 ## ❓ Частые вопросы
 
@@ -82,7 +82,7 @@
 
 ```bash
 pip install openpyxl websocket-client pyinstaller
-pyinstaller --onefile --console --distpath . --name export_marks export_marks.py
+pyinstaller --onefile --console --distpath . --name dnevnik-mesh-export dnevnik-mesh-export.py
 ```
 
 ## 📄 Лицензия

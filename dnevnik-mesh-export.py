@@ -65,7 +65,7 @@ def _ensure_log():
     global _LOG_FILE
     if _LOG_FILE is None:
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        _LOG_FILE = os.path.join(SCRIPT_DIR, f"export_marks_{ts}.log")
+        _LOG_FILE = os.path.join(SCRIPT_DIR, f"dnevnik-mesh-export_{ts}.log")
     return _LOG_FILE
 
 def log_exception(context=""):
