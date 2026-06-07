@@ -8,7 +8,7 @@
 ![Release](https://img.shields.io/github/v/release/maxinteresa-ops/dnevnik-mesh-export)
 
 Автоматический сбор всех оценок из электронного дневника **school.mos.ru (МЭШ)**  
-в файл Excel с удобной сводкой по предметам.
+в файл Excel с удобной сводкой по оценкам.
 
 </div>
 
