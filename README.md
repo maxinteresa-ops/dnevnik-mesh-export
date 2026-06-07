@@ -59,7 +59,7 @@
 ## ❓ Частые вопросы
 
 <details>
-<summary><strong>Где найти лог-файл и как отправить его разработчику?</strong></summary>
+<summary><strong>Где найти лог-файл и как отправить его разработчику при ошибке?</strong></summary>
 
 В папке с программой после ошибки создаётся файл `dnevnik-mesh-export_*.log`. Откройте его в блокноте и приложите к [Issues на GitHub](https://github.com/maxinteresa-ops/dnevnik-mesh-export/issues/new) — это поможет быстро разобраться.
 </details>
