@@ -1,0 +1,11 @@
+name: Вопрос или предложение
+description: Есть идея или нужна помощь — напишите!
+labels: [question]
+body:
+  - type: textarea
+    id: text
+    attributes:
+      label: Ваш вопрос или предложение
+      placeholder: Что хотите предложить или спросить?
+    validations:
+      required: true
