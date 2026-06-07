@@ -551,68 +551,94 @@ def main():
                             pass
             ws.column_dimensions[chr(64 + ci)].width = min(ml + 3, 60)
 
-        # === Сводная таблица (перекрёстная: Предмет × Оценка) ===
-        # Собираем данные: предмет → {оценка → количество}
-        pivot = defaultdict(lambda: defaultdict(int))
-        all_subjects = set()
-        all_grades = set()
+        # === Сводные таблицы (по каждому ребёнку, одна под другой) ===
+        from collections import defaultdict
+
+        # Группируем оценки по детям
+        marks_by_child = defaultdict(list)
         for m in all_marks:
-            subj = m["subject"]
-            grade = m["grade"]
-            pivot[subj][grade] += 1
-            all_subjects.add(subj)
-            all_grades.add(grade)
+            marks_by_child[m["child"]].append(m)
 
-        all_subjects = sorted(all_subjects)
-        grade_order = sorted(all_grades, key=lambda x: (x.isdigit() == False, int(x) if x.isdigit() else x))
+        sc = len(headers_main) + 3  # стартовая колонка сводных
+        current_row = 1
 
-        sc = len(headers_main) + 3  # стартовая колонка сводной
+        for child_name in sorted(marks_by_child.keys()):
+            child_marks = marks_by_child[child_name]
 
-        # Заголовок сводной: Предмет | оценка1 | оценка2 | ... | Итого
-        headers_pivot = ["Предмет"] + grade_order + ["Итого"]
-        for c, h in enumerate(headers_pivot, sc):
-            cell = ws.cell(1, c, h)
+            # Заголовок с именем ребёнка
+            cell = ws.cell(current_row, sc, child_name)
+            cell.font = Font(bold=True, size=12)
+            cell.alignment = Alignment(horizontal="left")
+            current_row += 1
+
+            # Собираем pivot для этого ребёнка
+            pivot = defaultdict(lambda: defaultdict(int))
+            subjects = set()
+            grades = set()
+            for m in child_marks:
+                pivot[m["subject"]][m["grade"]] += 1
+                subjects.add(m["subject"])
+                grades.add(m["grade"])
+
+            subjects = sorted(subjects)
+            grade_order = sorted(grades, key=lambda x: (x.isdigit() == False, int(x) if x.isdigit() else x))
+
+            # Заголовок: Предмет | оценка1 | ... | Итого
+            headers_pivot = ["Предмет"] + grade_order + ["Итого"]
+            for ci, h in enumerate(headers_pivot, sc):
+                cell = ws.cell(current_row, ci, h)
+                cell.font = Font(bold=True)
+                cell.border = thin_border
+            current_row += 1
+
+            # Данные
+            for subj in subjects:
+                ws.cell(current_row, sc, subj).border = thin_border
+                row_total = 0
+                for gi, grade in enumerate(grade_order, sc + 1):
+                    val = pivot[subj].get(grade, 0)
+                    cell = ws.cell(current_row, gi, val)
+                    cell.border = thin_border
+                    cell.alignment = Alignment(horizontal="center")
+                    row_total += val
+                cell_total = ws.cell(current_row, sc + len(grade_order) + 1, row_total)
+                cell_total.border = thin_border
+                cell_total.font = Font(bold=True)
+                cell_total.alignment = Alignment(horizontal="center")
+                current_row += 1
+
+            # Итого строка
+            cell = ws.cell(current_row, sc, "Итого")
             cell.font = Font(bold=True)
             cell.border = thin_border
-
-        # Данные сводной
-        for ri, subj in enumerate(all_subjects, 2):
-            ws.cell(ri, sc, subj).border = thin_border
-            row_total = 0
+            grand_total = 0
             for gi, grade in enumerate(grade_order, sc + 1):
-                val = pivot[subj].get(grade, 0)
-                cell = ws.cell(ri, gi, val)
+                col_total = sum(pivot[s].get(grade, 0) for s in subjects)
+                cell = ws.cell(current_row, gi, col_total)
+                cell.font = Font(bold=True)
                 cell.border = thin_border
                 cell.alignment = Alignment(horizontal="center")
-                row_total += val
-            # Итого по строке
-            cell_total = ws.cell(ri, sc + len(grade_order) + 1, row_total)
-            cell_total.border = thin_border
-            cell_total.font = Font(bold=True)
-            cell_total.alignment = Alignment(horizontal="center")
+                grand_total += col_total
+            cell_gt = ws.cell(current_row, sc + len(grade_order) + 1, grand_total)
+            cell_gt.font = Font(bold=True)
+            cell_gt.border = thin_border
+            cell_gt.alignment = Alignment(horizontal="center")
 
-        # Итого по столбцам
-        last_data_row = len(all_subjects) + 1
-        ws.cell(last_data_row + 1, sc, "Итого").font = Font(bold=True)
-        ws.cell(last_data_row + 1, sc).border = thin_border
-        grand_total = 0
-        for gi, grade in enumerate(grade_order, sc + 1):
-            col_total = sum(pivot[s].get(grade, 0) for s in all_subjects)
-            cell = ws.cell(last_data_row + 1, gi, col_total)
-            cell.font = Font(bold=True)
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal="center")
-            grand_total += col_total
-        cell_gt = ws.cell(last_data_row + 1, sc + len(grade_order) + 1, grand_total)
-        cell_gt.font = Font(bold=True)
-        cell_gt.border = thin_border
-        cell_gt.alignment = Alignment(horizontal="center")
+            current_row += 2  # пустая строка между детьми
 
-        # Автоширина сводной
+        # Автоширина колонок сводных
         ws.column_dimensions[chr(64 + sc)].width = max(35, len("Предмет") + 3)
-        for gi in range(len(grade_order)):
-            ws.column_dimensions[chr(64 + sc + 1 + gi)].width = 10
-        ws.column_dimensions[chr(64 + sc + len(grade_order) + 1)].width = 10
+        # Остальные колонки (оценки + Итого) выставляем по максимальному children
+        max_grades = max(len(marks_by_child[c]) for c in marks_by_child)  # не то
+        max_grade_count = 0
+        for cm in marks_by_child.values():
+            gs = set(m["grade"] for m in cm)
+            max_grade_count = max(max_grade_count, len(gs))
+        max_grade_count += 1  # +1 для Итого
+        for gi in range(max_grade_count + 1):
+            col_idx = sc + 1 + gi
+            if col_idx <= 90:
+                ws.column_dimensions[chr(64 + col_idx)].width = 10
 
         # === Автофильтр на основную таблицу ===
         last_main_row = len(all_marks) + 1
