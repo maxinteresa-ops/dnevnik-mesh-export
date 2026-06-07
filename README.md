@@ -74,7 +74,7 @@
 
 Нажмите **«Продолжить без входа»** — аккаунт Google не нужен, программа работает без него:
 
-![Продолжить без входа](first-run-dialog.png)
+<a href="first-run-dialog.png" target="_blank"><img src="first-run-dialog.png" width="400" alt="Продолжить без входа"></a>
 
 **В сводной таблице куча нулей**
 
