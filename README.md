@@ -4,7 +4,7 @@
 
 ![Windows 11](https://img.shields.io/badge/Windows_11-✓-00a4ef?logo=windows)
 ![Python](https://img.shields.io/badge/Python-3.7%2B-3776AB?logo=python)
-![License](https://img.shields.io/badge/License-MIT-green)
+![License](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-orange)
 ![Release](https://img.shields.io/github/v/release/maxinteresa-ops/dnevnik-mesh-export)
 
 Автоматический сбор всех оценок из электронного дневника **school.mos.ru (МЭШ)**  
@@ -99,4 +99,13 @@ pyinstaller --onefile --console --distpath . --name dnevnik-mesh-export dnevnik-
 
 ## 📄 Лицензия
 
-MIT — делайте что хотите с этим кодом.
+**CC BY-NC-SA 4.0** (Creative Commons Attribution-NonCommercial-ShareAlike)
+
+| Разрешено | Запрещено |
+|---|---|
+| Скачивать и запускать | Коммерческое использование |
+| Делиться с другими | Встраивать в платные продукты |
+| Модифицировать код | Менять лицензию производных работ |
+| Использовать в личных и образовательных целях | Использовать торговую марку автора |
+
+Полный текст: [LICENSE](LICENSE)
