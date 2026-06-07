@@ -6,31 +6,24 @@ body:
     attributes:
       value: |
         Спасибо, что сообщаете об ошибке. Чем подробнее опишете — тем быстрее исправлю.
-
   - type: textarea
     id: what-happened
     attributes:
       label: Что случилось?
-      description: Опишите проблему — что ожидали увидеть, а что произошло на самом деле
       placeholder: Программа запустилась, но оценки не собрались...
     validations:
       required: true
-
   - type: textarea
     id: log
     attributes:
       label: Лог-файл
-      description: Откройте `dnevnik-mesh-export_*.log` в блокноте, скопируйте содержимое и вставьте сюда
-      placeholder: Приложите содержимое лог-файла
+      description: Откройте `dnevnik-mesh-export_*.log`, скопируйте сюда
       render: text
-
   - type: input
     id: windows
     attributes:
       label: Версия Windows
-      description: Нажмите Win+R → `winver` → Enter
-      placeholder: например, Windows 11 24H2
-
+      placeholder: Windows 11 24H2
   - type: dropdown
     id: browser
     attributes:
@@ -40,9 +33,3 @@ body:
         - Другой
     validations:
       required: true
-
-  - type: textarea
-    id: additional
-    attributes:
-      label: Дополнительно
-      description: Скриншоты, любые другие детали
