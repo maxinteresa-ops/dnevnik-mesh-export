@@ -43,7 +43,8 @@
 
 **Сколько ждать?** Обычно 10 секунд на сбор всех 38 учебных недель.
 <img width="1115" height="628" alt="image" src="https://github.com/user-attachments/assets/a8fbf6bd-7fb5-463d-b22c-65010ccb5cad" />
-<img width="1713" height="685" alt="image" src="https://github.com/user-attachments/assets/0333d4ec-906e-411d-b2dd-faea4c9a2e07" />
+<img width="1713" height="685" alt="image" src="https://github.com/user-attachments/assets/07d9e1e7-fd0a-4895-8da5-cfe41432c7b0" />
+
 
 
 ## 👨‍👩‍👧‍👦 Для родителей с несколькими детьми
