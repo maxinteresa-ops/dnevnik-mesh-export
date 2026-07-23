@@ -91,10 +91,7 @@
 
 Нажмите **«Не входить»** — аккаунт Google не нужен, программа работает без него:
 
-<a href="first-run-dialog.png" target="_blank">
-<img width="1024" height="758" alt="image" src="https://github.com/user-attachments/assets/ff48158b-6681-4930-8ce2-6af318b92ec6" alt="Не входить" />
-
-  <img src="first-run-dialog.png" width="400" alt="Не входить"></a>
+<a href="first-run-dialog.png" target="_blank"><img width="600" alt="image" src="https://github.com/user-attachments/assets/ff48158b-6681-4930-8ce2-6af318b92ec6" alt="Не входить" /></a>
 </details>
 
 ## 🛠 Сборка из исходников
