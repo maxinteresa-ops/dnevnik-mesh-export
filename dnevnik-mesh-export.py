@@ -5,7 +5,8 @@
 
 Скрипт сам запускает Chrome, получает токен и cookies через CDP,
 определяет список всех детей из профиля, собирает оценки каждого
-за 38 учебных недель и сохраняет grades.xlsx.
+за текущий и предыдущий учебный год (по 38 недель на год) и сохраняет
+grades.xlsx — по одному листу на учебный год.
 """
 
 import io
@@ -53,9 +54,23 @@ COEFFICIENT_KEYS = ("weight", "coefficient", "mark_weight", "factor", "ratio")
 MAX_COEFFICIENT = 10  # защита от «размножения» строк из-за мусорного значения
 
 _now = datetime.now()
+# Учебный год начинается 1 сентября: до сентября текущий уч. год начался в прошлом году.
 _year = _now.year if _now.month >= 9 else _now.year - 1
-FIRST_WEEK = f"{_year}-09-01"
 MES_PAGE = f"https://school.mos.ru/diary/marks/current-marks?date=01.09.{_year}"
+
+# Сколько учебных годов собирать: 1 — только текущий, 2 — текущий и предыдущий.
+YEARS_TO_COLLECT = 2
+
+
+def year_label(year):
+    """Метка учебного года по году начала: 2026 -> '2026-2027'."""
+    return f"{year}-{year + 1}"
+
+
+def sheet_name_for_year(year):
+    """Имя листа Excel для учебного года: 2026 -> 'Оценки_2026-2027'."""
+    return f"Оценки_{year_label(year)}"
+
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if getattr(sys, 'frozen', False):
@@ -187,6 +202,7 @@ def get_profile(token, cookie_str):
 
 
 def get_marks(token, cookie_str, student_id, from_date, to_date):
+    """Оценки за период. Пустой список — оценок нет, None — запрос не удался."""
     url = f"{API_URL}/api/family/web/v1/marks?student_id={student_id}&from={from_date}&to={to_date}"
     headers = {
         "Accept": "application/json, text/plain, */*",
@@ -205,14 +221,15 @@ def get_marks(token, cookie_str, student_id, from_date, to_date):
     except URLError as e:
         log_exception(f"get_marks({from_date}..{to_date}): HTTP error")
         print(f"  HTTP ошибка {from_date}..{to_date}: {e}")
-        return []
+        return None
     except json.JSONDecodeError as e:
         log_exception(f"get_marks({from_date}..{to_date}): JSON decode")
         print(f"  JSON ошибка {from_date}..{to_date}: {e}")
-        return []
+        return None
     except Exception as e:
         log_exception(f"get_marks({from_date}..{to_date})")
-        return []
+        print(f"  Ошибка запроса {from_date}..{to_date}: {e}")
+        return None
 
 
 def fmt_date(d):
@@ -338,6 +355,219 @@ def build_cookie_str(cookies_map):
                  'oxxfgh', 'uwyii', 'uwyiert']
     parts = [f"{k}={cookies_map[k]}" for k in important if k in cookies_map]
     return "; ".join(parts)
+
+
+# === Сбор и запись по учебным годам ===
+def collect_year(token, cookie_str, children, year):
+    """Собрать оценки всех детей за учебный год, начинающийся 1 сентября `year`.
+
+    Возвращает (all_marks, stats).
+    """
+    start = datetime.strptime(f"{year}-09-01", "%Y-%m-%d")
+    all_marks = []
+    stats = {
+        "weeks_with_data": 0,
+        "weeks_empty": 0,
+        "weeks_failed": 0,
+        "total_weeks": 0,
+        "marks_with_coef": 0,
+        "extra_rows": 0,
+    }
+
+    print(f"\n  === Учебный год {year_label(year)} (с {fmt_date(start)}) ===")
+
+    for child in children:
+        student_id = child["id"]
+        child_name = f"{child.get('last_name', '')} {child.get('first_name', '')}".strip()
+        print(f"\n  Ребёнок: {child_name} (ID: {student_id})")
+
+        for wn in range(1, WEEK_COUNT + 1):
+            try:
+                ws_ = start + timedelta(weeks=wn - 1)
+                we_ = ws_ + timedelta(days=6)
+                f_str = ws_.strftime("%Y-%m-%d")
+                t_str = we_.strftime("%Y-%m-%d")
+                stats["total_weeks"] += 1
+
+                marks = get_marks(token, cookie_str, student_id, f_str, t_str)
+
+                if marks is None:
+                    # Запрос не удался — оценки за эту неделю потеряны.
+                    stats["weeks_failed"] += 1
+                    print(f"    Неделя {wn:2d} ({f_str}..{t_str}): НЕ ЗАГРУЖЕНА")
+                elif marks:
+                    stats["weeks_with_data"] += 1
+                    print(f"    Неделя {wn:2d} ({f_str}..{t_str}): {len(marks)} оценок")
+                    for m in marks:
+                        try:
+                            date_raw = m.get("date", "")
+                            if not date_raw:
+                                continue
+                            d = datetime.strptime(date_raw, "%Y-%m-%d")
+                            coef, _ = parse_coefficient(m)
+                            dump_mark_fields(m)
+                            base = {
+                                "child": child_name,
+                                "date": fmt_date(d),
+                                "subject": m.get("subject_name", ""),
+                                "topic": m.get("control_form_name", ""),
+                                "grade": m.get("value", ""),
+                                "coef": coef,
+                            }
+                            # Коэффициент 2 = оценка идёт в зачёт дважды:
+                            # дублируем строку столько раз, каков коэффициент.
+                            for _ in range(coef):
+                                all_marks.append(dict(base))
+                            if coef > 1:
+                                stats["marks_with_coef"] += 1
+                                stats["extra_rows"] += coef - 1
+                        except Exception:
+                            log_exception(f"collect_year({year}): parse mark, неделя {wn}")
+                            continue
+                else:
+                    stats["weeks_empty"] += 1
+            except Exception as e:
+                log_exception(f"collect_year({year}): week {wn}")
+                print(f"    Неделя {wn:2d}: Ошибка: {e}")
+                stats["weeks_failed"] += 1
+
+    return all_marks, stats
+
+
+def write_year_sheet(wb, title, all_marks):
+    """Лист «плоская таблица + сводки по детям» для одного учебного года."""
+    from openpyxl.styles import Font, Border, Side, Alignment
+    from collections import defaultdict
+
+    ws = wb.create_sheet(title)
+
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    # === Основная таблица ===
+    headers_main = ["Ребёнок", "Дата", "Предмет", "Тема урока", "Оценка", "Коэффициент"]
+    ws.append(headers_main)
+    for c in range(1, len(headers_main) + 1):
+        cell = ws.cell(1, c)
+        cell.font = Font(bold=True)
+        cell.border = thin_border
+
+    for m in all_marks:
+        r = ws.max_row + 1
+        for c, val in enumerate([m["child"], m["date"], m["subject"], m["topic"],
+                                 m["grade"], m["coef"]], 1):
+            cell = ws.cell(r, c, val)
+            cell.border = thin_border
+
+    # Автоширина основной таблицы
+    for ci in range(1, len(headers_main) + 1):
+        ml = len(headers_main[ci - 1])
+        for row in ws.iter_rows(min_col=ci, max_col=ci, values_only=True):
+            for cell in row:
+                if cell:
+                    try:
+                        ml = max(ml, len(str(cell)))
+                    except Exception:
+                        pass
+        ws.column_dimensions[chr(64 + ci)].width = min(ml + 3, 60)
+
+    # === Автофильтр на основную таблицу ===
+    last_main_row = len(all_marks) + 1
+    last_main_col = chr(64 + len(headers_main))
+    ws.auto_filter.ref = f"A1:{last_main_col}{last_main_row}"
+
+    if not all_marks:
+        return ws
+
+    # === Сводные таблицы (по каждому ребёнку, одна под другой) ===
+    marks_by_child = defaultdict(list)
+    for m in all_marks:
+        marks_by_child[m["child"]].append(m)
+
+    sc = len(headers_main) + 3  # стартовая колонка сводных
+    current_row = 1
+
+    for child_name in sorted(marks_by_child.keys()):
+        child_marks = marks_by_child[child_name]
+
+        # Заголовок с именем ребёнка
+        cell = ws.cell(current_row, sc, child_name)
+        cell.font = Font(bold=True, size=12)
+        cell.alignment = Alignment(horizontal="left")
+        current_row += 1
+
+        # Собираем pivot для этого ребёнка
+        pivot = defaultdict(lambda: defaultdict(int))
+        subjects = set()
+        grades = set()
+        for m in child_marks:
+            pivot[m["subject"]][m["grade"]] += 1
+            subjects.add(m["subject"])
+            grades.add(m["grade"])
+
+        subjects = sorted(subjects)
+        grade_order = sorted(grades, key=lambda x: (x.isdigit() == False, int(x) if x.isdigit() else x))
+
+        # Заголовок: Предмет | оценка1 | ... | Итого
+        headers_pivot = ["Предмет"] + grade_order + ["Итого"]
+        for ci, h in enumerate(headers_pivot, sc):
+            cell = ws.cell(current_row, ci, h)
+            cell.font = Font(bold=True)
+            cell.border = thin_border
+        current_row += 1
+
+        # Данные
+        for subj in subjects:
+            ws.cell(current_row, sc, subj).border = thin_border
+            row_total = 0
+            for gi, grade in enumerate(grade_order, sc + 1):
+                val = pivot[subj].get(grade, 0)
+                cell = ws.cell(current_row, gi, val)
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal="center")
+                row_total += val
+            cell_total = ws.cell(current_row, sc + len(grade_order) + 1, row_total)
+            cell_total.border = thin_border
+            cell_total.font = Font(bold=True)
+            cell_total.alignment = Alignment(horizontal="center")
+            current_row += 1
+
+        # Итого строка
+        cell = ws.cell(current_row, sc, "Итого")
+        cell.font = Font(bold=True)
+        cell.border = thin_border
+        grand_total = 0
+        for gi, grade in enumerate(grade_order, sc + 1):
+            col_total = sum(pivot[s].get(grade, 0) for s in subjects)
+            cell = ws.cell(current_row, gi, col_total)
+            cell.font = Font(bold=True)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center")
+            grand_total += col_total
+        cell_gt = ws.cell(current_row, sc + len(grade_order) + 1, grand_total)
+        cell_gt.font = Font(bold=True)
+        cell_gt.border = thin_border
+        cell_gt.alignment = Alignment(horizontal="center")
+
+        current_row += 2  # пустая строка между детьми
+
+    # Автоширина колонок сводных
+    ws.column_dimensions[chr(64 + sc)].width = max(35, len("Предмет") + 3)
+    max_grade_count = 0
+    for cm in marks_by_child.values():
+        gs = set(m["grade"] for m in cm)
+        max_grade_count = max(max_grade_count, len(gs))
+    max_grade_count += 1  # +1 для Итого
+    for gi in range(max_grade_count + 1):
+        col_idx = sc + 1 + gi
+        if col_idx <= 90:
+            ws.column_dimensions[chr(64 + col_idx)].width = 10
+
+    return ws
 
 
 # === Главная ===
@@ -498,70 +728,28 @@ def main():
         print(f"    - {ch.get('last_name','')} {ch.get('first_name','')} (ID: {ch.get('id')}, {ch.get('class_name','')} класс)")
 
     # ===== 4. Сбор оценок =====
-    print(f"\n[3] Сбор оценок за {WEEK_COUNT} недель...")
+    years = list(range(_year, _year - YEARS_TO_COLLECT, -1))  # текущий год, затем предыдущий
+    print(f"\n[3] Сбор оценок: {len(years)} уч. год(а) × {WEEK_COUNT} недель")
+    print(f"    Годы: {', '.join(year_label(y) for y in years)}")
     print("-" * 60)
 
-    start = datetime.strptime(FIRST_WEEK, "%Y-%m-%d")
-    all_marks = []
-    weeks_with_data = 0
-    weeks_empty = 0
-    total_weeks = 0
-    marks_with_coef = 0   # оценок с коэффициентом больше 1
-    extra_rows = 0        # добавлено строк из-за коэффициентов
-
-    for child in children:
-        student_id = child["id"]
-        child_name = f"{child.get('last_name', '')} {child.get('first_name', '')}".strip()
-        print(f"\n  Ребёнок: {child_name} (ID: {student_id})")
-
-        for wn in range(1, WEEK_COUNT + 1):
-            try:
-                ws_ = start + timedelta(weeks=wn - 1)
-                we_ = ws_ + timedelta(days=6)
-                f_str = ws_.strftime("%Y-%m-%d")
-                t_str = we_.strftime("%Y-%m-%d")
-                total_weeks += 1
-
-                marks = get_marks(token, cookie_str, student_id, f_str, t_str)
-
-                if marks:
-                    weeks_with_data += 1
-                    print(f"    Неделя {wn:2d} ({f_str}..{t_str}): {len(marks)} оценок")
-                    for m in marks:
-                        try:
-                            date_raw = m.get("date", "")
-                            if date_raw:
-                                d = datetime.strptime(date_raw, "%Y-%m-%d")
-                                coef, coef_key = parse_coefficient(m)
-                                dump_mark_fields(m)
-                                base = {
-                                    "child": child_name,
-                                    "date": fmt_date(d),
-                                    "subject": m.get("subject_name", ""),
-                                    "topic": m.get("control_form_name", ""),
-                                    "grade": m.get("value", ""),
-                                    "coef": coef,
-                                }
-                                # Коэффициент 2 = оценка идёт в зачёт дважды:
-                                # дублируем строку столько раз, каков коэффициент.
-                                for _ in range(coef):
-                                    all_marks.append(base)
-                                if coef > 1:
-                                    marks_with_coef += 1
-                                    extra_rows += coef - 1
-                        except Exception as e:
-                            log_exception(f"main: parse mark {wn}")
-                            continue
-                else:
-                    weeks_empty += 1
-            except Exception as e:
-                log_exception(f"main: week {wn}")
-                print(f"    Неделя {wn:2d}: Ошибка: {e}")
-                weeks_empty += 1
+    collected = []  # [(year, all_marks, stats), ...]
+    for y in years:
+        try:
+            marks, stats = collect_year(token, cookie_str, children, y)
+        except Exception:
+            log_exception(f"main: collect_year({y})")
+            marks, stats = [], {"weeks_with_data": 0, "weeks_empty": 0, "weeks_failed": 0,
+                                "total_weeks": 0, "marks_with_coef": 0, "extra_rows": 0}
+        collected.append((y, marks, stats))
+        print(f"\n  Итог за {year_label(y)}: {len(marks)} оценок, "
+              f"{stats['weeks_with_data']} недель с данными, "
+              f"{stats['weeks_failed']} недель не загружено")
 
     print("-" * 60)
 
-    if not all_marks:
+    total_marks = sum(len(m) for _, m, _ in collected)
+    if not total_marks:
         print("\nНет данных. Проверьте авторизацию в МЭШ.")
         wait_exit(); sys.exit(1)
 
@@ -574,148 +762,25 @@ def main():
         except Exception:
             pass
 
+    save_ok = False
     try:
-        from openpyxl.styles import Font, Border, Side, Alignment, PatternFill
-        from collections import defaultdict
-
         wb = Workbook()
-        ws = wb.active
-        ws.title = "Оценки"
+        wb.remove(wb.active)  # пустой лист по умолчанию не нужен
 
-        thin_border = Border(
-            left=Side(style="thin"),
-            right=Side(style="thin"),
-            top=Side(style="thin"),
-            bottom=Side(style="thin"),
-        )
+        for y, marks, _ in collected:
+            title = sheet_name_for_year(y)
+            if not marks:
+                print(f"  Лист «{title}»: оценок нет, создаётся пустым.")
+            else:
+                print(f"  Лист «{title}»: {len(marks)} строк.")
+            write_year_sheet(wb, title, marks)
 
-        # === Основная таблица ===
-        headers_main = ["Ребёнок", "Дата", "Предмет", "Тема урока", "Оценка", "Коэффициент"]
-        ws.append(headers_main)
-        for c in range(1, len(headers_main) + 1):
-            cell = ws.cell(1, c)
-            cell.font = Font(bold=True)
-            cell.border = thin_border
-
-        for m in all_marks:
-            r = ws.max_row + 1
-            for c, val in enumerate([m["child"], m["date"], m["subject"], m["topic"],
-                                     m["grade"], m["coef"]], 1):
-                cell = ws.cell(r, c, val)
-                cell.border = thin_border
-
-        # Автоширина основной таблицы
-        for ci in range(1, len(headers_main) + 1):
-            ml = len(headers_main[ci - 1])
-            for row in ws.iter_rows(min_col=ci, max_col=ci, values_only=True):
-                for cell in row:
-                    if cell:
-                        try:
-                            ml = max(ml, len(str(cell)))
-                        except Exception:
-                            pass
-            ws.column_dimensions[chr(64 + ci)].width = min(ml + 3, 60)
-
-        # === Сводные таблицы (по каждому ребёнку, одна под другой) ===
-        from collections import defaultdict
-
-        # Группируем оценки по детям
-        marks_by_child = defaultdict(list)
-        for m in all_marks:
-            marks_by_child[m["child"]].append(m)
-
-        sc = len(headers_main) + 3  # стартовая колонка сводных
-        current_row = 1
-
-        for child_name in sorted(marks_by_child.keys()):
-            child_marks = marks_by_child[child_name]
-
-            # Заголовок с именем ребёнка
-            cell = ws.cell(current_row, sc, child_name)
-            cell.font = Font(bold=True, size=12)
-            cell.alignment = Alignment(horizontal="left")
-            current_row += 1
-
-            # Собираем pivot для этого ребёнка
-            pivot = defaultdict(lambda: defaultdict(int))
-            subjects = set()
-            grades = set()
-            for m in child_marks:
-                pivot[m["subject"]][m["grade"]] += 1
-                subjects.add(m["subject"])
-                grades.add(m["grade"])
-
-            subjects = sorted(subjects)
-            grade_order = sorted(grades, key=lambda x: (x.isdigit() == False, int(x) if x.isdigit() else x))
-
-            # Заголовок: Предмет | оценка1 | ... | Итого
-            headers_pivot = ["Предмет"] + grade_order + ["Итого"]
-            for ci, h in enumerate(headers_pivot, sc):
-                cell = ws.cell(current_row, ci, h)
-                cell.font = Font(bold=True)
-                cell.border = thin_border
-            current_row += 1
-
-            # Данные
-            for subj in subjects:
-                ws.cell(current_row, sc, subj).border = thin_border
-                row_total = 0
-                for gi, grade in enumerate(grade_order, sc + 1):
-                    val = pivot[subj].get(grade, 0)
-                    cell = ws.cell(current_row, gi, val)
-                    cell.border = thin_border
-                    cell.alignment = Alignment(horizontal="center")
-                    row_total += val
-                cell_total = ws.cell(current_row, sc + len(grade_order) + 1, row_total)
-                cell_total.border = thin_border
-                cell_total.font = Font(bold=True)
-                cell_total.alignment = Alignment(horizontal="center")
-                current_row += 1
-
-            # Итого строка
-            cell = ws.cell(current_row, sc, "Итого")
-            cell.font = Font(bold=True)
-            cell.border = thin_border
-            grand_total = 0
-            for gi, grade in enumerate(grade_order, sc + 1):
-                col_total = sum(pivot[s].get(grade, 0) for s in subjects)
-                cell = ws.cell(current_row, gi, col_total)
-                cell.font = Font(bold=True)
-                cell.border = thin_border
-                cell.alignment = Alignment(horizontal="center")
-                grand_total += col_total
-            cell_gt = ws.cell(current_row, sc + len(grade_order) + 1, grand_total)
-            cell_gt.font = Font(bold=True)
-            cell_gt.border = thin_border
-            cell_gt.alignment = Alignment(horizontal="center")
-
-            current_row += 2  # пустая строка между детьми
-
-        # Автоширина колонок сводных
-        ws.column_dimensions[chr(64 + sc)].width = max(35, len("Предмет") + 3)
-        # Остальные колонки (оценки + Итого) выставляем по максимальному children
-        max_grades = max(len(marks_by_child[c]) for c in marks_by_child)  # не то
-        max_grade_count = 0
-        for cm in marks_by_child.values():
-            gs = set(m["grade"] for m in cm)
-            max_grade_count = max(max_grade_count, len(gs))
-        max_grade_count += 1  # +1 для Итого
-        for gi in range(max_grade_count + 1):
-            col_idx = sc + 1 + gi
-            if col_idx <= 90:
-                ws.column_dimensions[chr(64 + col_idx)].width = 10
-
-        # === Автофильтр на основную таблицу ===
-        last_main_row = len(all_marks) + 1
-        last_main_col = chr(64 + len(headers_main))
-        ws.auto_filter.ref = f"A1:{last_main_col}{last_main_row}"
-
+        wb.active = 0  # открывать на текущем учебном году
         wb.save(OUTPUT_FILE)
         save_ok = True
     except Exception as e:
-        log_exception("main[6]: save XLSX")
+        log_exception("main: save XLSX")
         print(f"\nОшибка сохранения файла: {e}")
-        save_ok = False
 
     # ===== Закрытие Chrome =====
     print("\nЗакрываю Chrome...")
@@ -732,20 +797,32 @@ def main():
     print("           С Т А Т И С Т И К А")
     print(f"{'=' * 60}")
     print(f"  Детей:                     {len(children)}")
-    print(f"  Всего оценок собрано:      {len(all_marks)}")
-    if marks_with_coef or extra_rows:
-        print(f"  Оценок с коэффициентом >1: {marks_with_coef}")
-        print(f"  Добавлено строк за счёт к.: {extra_rows}")
+
+    for y, marks, stats in collected:
+        print()
+        print(f"  --- Учебный год {year_label(y)} (лист «{sheet_name_for_year(y)}») ---")
+        print(f"  Оценок собрано:            {len(marks)}")
+        if stats["marks_with_coef"] or stats["extra_rows"]:
+            print(f"  Оценок с коэффициентом >1: {stats['marks_with_coef']}")
+            print(f"  Добавлено строк за счёт к.: {stats['extra_rows']}")
+        else:
+            print(f"  Оценок с коэффициентом >1: 0")
+        print(f"  Недель с данными:          {stats['weeks_with_data']}")
+        print(f"  Недель без оценок:         {stats['weeks_empty']}")
+        print(f"  Недель не загружено:       {stats['weeks_failed']}")
+        print(f"  Всего недель проверено:    {stats['total_weeks']}")
+        if stats["weeks_with_data"]:
+            print(f"  Среднее оценок за неделю:  {len(marks) // stats['weeks_with_data']:.1f}")
+
+    print()
+    print(f"  ВСЕГО оценок (все годы):   {total_marks}")
     if _COEF_KEY_USED:
         print(f"  Поле коэффициента в API:   {', '.join(sorted(_COEF_KEY_USED))}")
     else:
         print("  Поле коэффициента в API:   не найдено (все коэффициенты = 1)")
-    print(f"  Недель с данными:          {weeks_with_data}")
-    print(f"  Всего недель проверено:    {total_weeks}")
-    if weeks_with_data:
-        print(f"  Среднее оценок за неделю:  {len(all_marks)//max(weeks_with_data,1):.1f}")
     print()
     if save_ok:
+        print(f"  Листов в файле:            {len(collected)}")
         print(f"  Файл сохранён: {OUTPUT_FILE}")
     else:
         print(f"  Файл НЕ сохранён из-за ошибки!")
