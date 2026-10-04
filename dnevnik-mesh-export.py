@@ -58,8 +58,13 @@ _now = datetime.now()
 _year = _now.year if _now.month >= 9 else _now.year - 1
 MES_PAGE = f"https://school.mos.ru/diary/marks/current-marks?date=01.09.{_year}"
 
-# Сколько учебных годов собирать: 1 — только текущий, 2 — текущий и предыдущий.
-YEARS_TO_COLLECT = 2
+# Сколько учебных годов собирать.
+# По умолчанию 1: МЭШ отдаёт детальные оценки (по датам и темам) только за текущий
+# учебный год. За прошлые годы обычный эндпоинт оценок возвращает пустой список,
+# параметр academic_year_id игнорируется, а страница архива /diary/marks/archive
+# в веб-версии не реализована («Эту страницу ещё не изобрели»). Проверено 04.10.2026.
+# Если МЭШ когда-нибудь откроет архив — достаточно поставить здесь 2.
+YEARS_TO_COLLECT = 1
 
 
 def year_label(year):
@@ -728,9 +733,12 @@ def main():
         print(f"    - {ch.get('last_name','')} {ch.get('first_name','')} (ID: {ch.get('id')}, {ch.get('class_name','')} класс)")
 
     # ===== 4. Сбор оценок =====
-    years = list(range(_year, _year - YEARS_TO_COLLECT, -1))  # текущий год, затем предыдущий
+    years = list(range(_year, _year - YEARS_TO_COLLECT, -1))  # текущий год (и предыдущие, если задано)
     print(f"\n[3] Сбор оценок: {len(years)} уч. год(а) × {WEEK_COUNT} недель")
     print(f"    Годы: {', '.join(year_label(y) for y in years)}")
+    if YEARS_TO_COLLECT == 1:
+        print(f"    Прошлый учебный год не собирается: МЭШ отдаёт детальные оценки")
+        print(f"    только за текущий год, архив в веб-версии не работает.")
     print("-" * 60)
 
     collected = []  # [(year, all_marks, stats), ...]
@@ -815,11 +823,16 @@ def main():
             print(f"  Среднее оценок за неделю:  {len(marks) // stats['weeks_with_data']:.1f}")
 
     print()
-    print(f"  ВСЕГО оценок (все годы):   {total_marks}")
+    if len(years) > 1:
+        print(f"  ВСЕГО оценок (все годы):   {total_marks}")
     if _COEF_KEY_USED:
         print(f"  Поле коэффициента в API:   {', '.join(sorted(_COEF_KEY_USED))}")
     else:
         print("  Поле коэффициента в API:   не найдено (все коэффициенты = 1)")
+    if YEARS_TO_COLLECT == 1:
+        print()
+        print("  Примечание: детальных оценок за прошлые учебные годы в МЭШ нет —")
+        print("  сервис отдаёт их только за текущий год (архив в веб-версии не работает).")
     print()
     if save_ok:
         print(f"  Листов в файле:            {len(collected)}")
