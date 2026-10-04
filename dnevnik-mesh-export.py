@@ -46,6 +46,12 @@ API_URL = "https://school.mos.ru"
 CHROME_DEBUG_URL = "http://127.0.0.1:9222"
 WEEK_COUNT = 38
 
+# Возможные имена поля с коэффициентом (весом) оценки в ответе API.
+# МЭШ показывает коэффициент только когда он больше 1, поэтому отсутствие
+# поля или мусор в нём трактуем как коэффициент 1.
+COEFFICIENT_KEYS = ("weight", "coefficient", "mark_weight", "factor", "ratio")
+MAX_COEFFICIENT = 10  # защита от «размножения» строк из-за мусорного значения
+
 _now = datetime.now()
 _year = _now.year if _now.month >= 9 else _now.year - 1
 FIRST_WEEK = f"{_year}-09-01"
@@ -211,6 +217,52 @@ def get_marks(token, cookie_str, student_id, from_date, to_date):
 
 def fmt_date(d):
     return d.strftime("%d.%m.%Y")
+
+
+# === Коэффициент (вес) оценки ===
+_COEF_KEY_USED = set()
+_MARK_FIELDS_DUMPED = False
+
+
+def parse_coefficient(mark):
+    """Вернуть (коэффициент, имя поля). Нет поля/мусор/меньше 1 -> (1, None)."""
+    for key in COEFFICIENT_KEYS:
+        if key not in mark:
+            continue
+        raw = mark.get(key)
+        if raw is None or raw == "":
+            continue
+        try:
+            val = int(float(str(raw).replace(",", ".")))
+        except (TypeError, ValueError):
+            continue
+        if val < 1:
+            continue
+        if val > MAX_COEFFICIENT:
+            val = MAX_COEFFICIENT
+        _COEF_KEY_USED.add(key)
+        return val, key
+    return 1, None
+
+
+def dump_mark_fields(mark):
+    """Один раз за запуск записать в лог список полей оценки из API.
+
+    Нужно, чтобы по реальному ответу МЭШ проверить имя поля с коэффициентом.
+    """
+    global _MARK_FIELDS_DUMPED
+    if _MARK_FIELDS_DUMPED:
+        return
+    _MARK_FIELDS_DUMPED = True
+    try:
+        with open(_ensure_log(), "a", encoding="utf-8") as f:
+            f.write(f"=== {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+            f.write("Поля оценки из API (проверка имени поля с коэффициентом):\n")
+            f.write("Ищем: " + ", ".join(COEFFICIENT_KEYS) + "\n")
+            f.write(json.dumps(mark, ensure_ascii=False, indent=2, default=str))
+            f.write("\n\n")
+    except Exception:
+        pass
 
 
 # === Автозапуск Chrome ===
@@ -454,6 +506,8 @@ def main():
     weeks_with_data = 0
     weeks_empty = 0
     total_weeks = 0
+    marks_with_coef = 0   # оценок с коэффициентом больше 1
+    extra_rows = 0        # добавлено строк из-за коэффициентов
 
     for child in children:
         student_id = child["id"]
@@ -478,13 +532,23 @@ def main():
                             date_raw = m.get("date", "")
                             if date_raw:
                                 d = datetime.strptime(date_raw, "%Y-%m-%d")
-                                all_marks.append({
+                                coef, coef_key = parse_coefficient(m)
+                                dump_mark_fields(m)
+                                base = {
                                     "child": child_name,
                                     "date": fmt_date(d),
                                     "subject": m.get("subject_name", ""),
                                     "topic": m.get("control_form_name", ""),
                                     "grade": m.get("value", ""),
-                                })
+                                    "coef": coef,
+                                }
+                                # Коэффициент 2 = оценка идёт в зачёт дважды:
+                                # дублируем строку столько раз, каков коэффициент.
+                                for _ in range(coef):
+                                    all_marks.append(base)
+                                if coef > 1:
+                                    marks_with_coef += 1
+                                    extra_rows += coef - 1
                         except Exception as e:
                             log_exception(f"main: parse mark {wn}")
                             continue
@@ -526,7 +590,7 @@ def main():
         )
 
         # === Основная таблица ===
-        headers_main = ["Ребёнок", "Дата", "Предмет", "Тема урока", "Оценка"]
+        headers_main = ["Ребёнок", "Дата", "Предмет", "Тема урока", "Оценка", "Коэффициент"]
         ws.append(headers_main)
         for c in range(1, len(headers_main) + 1):
             cell = ws.cell(1, c)
@@ -535,7 +599,8 @@ def main():
 
         for m in all_marks:
             r = ws.max_row + 1
-            for c, val in enumerate([m["child"], m["date"], m["subject"], m["topic"], m["grade"]], 1):
+            for c, val in enumerate([m["child"], m["date"], m["subject"], m["topic"],
+                                     m["grade"], m["coef"]], 1):
                 cell = ws.cell(r, c, val)
                 cell.border = thin_border
 
@@ -642,7 +707,8 @@ def main():
 
         # === Автофильтр на основную таблицу ===
         last_main_row = len(all_marks) + 1
-        ws.auto_filter.ref = f"A1:E{last_main_row}"
+        last_main_col = chr(64 + len(headers_main))
+        ws.auto_filter.ref = f"A1:{last_main_col}{last_main_row}"
 
         wb.save(OUTPUT_FILE)
         save_ok = True
@@ -667,6 +733,13 @@ def main():
     print(f"{'=' * 60}")
     print(f"  Детей:                     {len(children)}")
     print(f"  Всего оценок собрано:      {len(all_marks)}")
+    if marks_with_coef or extra_rows:
+        print(f"  Оценок с коэффициентом >1: {marks_with_coef}")
+        print(f"  Добавлено строк за счёт к.: {extra_rows}")
+    if _COEF_KEY_USED:
+        print(f"  Поле коэффициента в API:   {', '.join(sorted(_COEF_KEY_USED))}")
+    else:
+        print("  Поле коэффициента в API:   не найдено (все коэффициенты = 1)")
     print(f"  Недель с данными:          {weeks_with_data}")
     print(f"  Всего недель проверено:    {total_weeks}")
     if weeks_with_data:
