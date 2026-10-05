@@ -18,7 +18,7 @@ Windows-утилита: собирает все оценки за текущий
 | `grades.xlsx` | Результат работы (gitignored) |
 | `chrome-profile/` | Профиль Chrome с авторизацией МЭШ (gitignored) |
 | `.github/ISSUE_TEMPLATE/` | `bug_report.yml`, `question.yml`, `config.yml` (blank issues выключены) |
-| `ридми/` | Все картинки README + копия его текста (`ридми/README.md`). Картинки лежат в репозитории, а не на CDN GitHub |
+| `README/` | Все картинки README + точная копия его текста (`README/README.md`). Картинки лежат в репозитории, а не на CDN GitHub |
 | `social-preview.png` | Превью репозитория на GitHub (в README не используется) |
 
 ## Как работает
@@ -133,10 +133,11 @@ python -m PyInstaller @a
 
 - URL `origin` — обычный `https://github.com/maxinteresa-ops/dnevnik-mesh-export.git`,
   токен из него убран (05.10.2026). Пуш идёт через `gh` / Git Credential Manager.
-- `README.md` в корне — то, что видно на GitHub; картинки берутся из `ридми/` по относительным
-  путям (раньше часть лежала на CDN GitHub, теперь всё в репозитории).
-- `ридми/README.md` — копия для чтения локально, пути к картинкам в ней без префикса `ридми/`.
-  **При правке корневого README обновляйте и копию**, иначе они разойдутся.
+- `README.md` в корне — то, что видно на GitHub; картинки берутся из папки `README/`
+  по относительным путям (раньше часть лежала на CDN GitHub, теперь всё в репозитории).
+- `README/README.md` — копия **байт в байт** того же текста, как и в корне (владелец проекта
+  требует, чтобы локальный README был 1:1 с выложенным на GitHub). При правке корневого README
+  обновляйте копию: `Copy-Item README.md README/README.md`.
 - В `.gitignore` внесены копии результатов (`*grades*.xlsx`), черновики скриншотов
   (`first-run-dialog[0-9]*.png`), собранный дистрибутив (`dnevnik-mesh-export.zip`)
   и Excel-локи (`~$*.xlsx`). Рабочая копия при этом чистая — лишнего в `git status` нет.

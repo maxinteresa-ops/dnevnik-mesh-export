@@ -42,8 +42,8 @@
 Файл `grades.xlsx` появится рядом с программой.
 
 **Сколько ждать?** Обычно 10 секунд на сбор всех 38 учебных недель.
-<img width="1115" height="628" alt="Статистика после сбора" src="ридми/быстрый-старт-1.png" />
-<img width="1713" height="685" alt="Таблица с оценками в Excel" src="ридми/быстрый-старт-2.png" />
+<img width="1115" height="628" alt="Статистика после сбора" src="README/быстрый-старт-1.png" />
+<img width="1713" height="685" alt="Таблица с оценками в Excel" src="README/быстрый-старт-2.png" />
 
 
 
@@ -91,7 +91,7 @@
 
 Нажмите **«Не входить»** — аккаунт Google не нужен, программа работает без него:
 
-<a href="ридми/first-run-dialog.png" target="_blank"><img width="600" alt="Диалог «Не входить» при первом запуске Chrome" src="ридми/first-run-dialog.png" /></a>
+<a href="README/first-run-dialog.png" target="_blank"><img width="600" alt="Диалог «Не входить» при первом запуске Chrome" src="README/first-run-dialog.png" /></a>
 </details>
 
 ## 🛠 Сборка из исходников
