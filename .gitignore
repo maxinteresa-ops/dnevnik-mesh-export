@@ -8,12 +8,6 @@ marks_api_response.*
 dnevnik-mesh-export.zip
 first-run-dialog[0-9]*.png
 
-# Локальные материалы и инструменты
-1/
-.codegraph/
-.reasonix/
-reasonix.toml
-
 # Python
 __pycache__/
 *.pyc

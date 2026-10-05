@@ -18,7 +18,7 @@ Windows-утилита: собирает все оценки за текущий
 | `grades.xlsx` | Результат работы (gitignored) |
 | `chrome-profile/` | Профиль Chrome с авторизацией МЭШ (gitignored) |
 | `.github/ISSUE_TEMPLATE/` | `bug_report.yml`, `question.yml`, `config.yml` (blank issues выключены) |
-| `reasonix.toml` | Локальный конфиг агента |
+| `first-run-dialog.png`, `social-preview.png` | Картинки для README и превью репозитория |
 
 ## Как работает
 
@@ -132,6 +132,9 @@ python -m PyInstaller @a
 
 - URL `origin` — обычный `https://github.com/maxinteresa-ops/dnevnik-mesh-export.git`,
   токен из него убран (05.10.2026). Пуш идёт через `gh` / Git Credential Manager.
-- Мусор (папка `1/` с mhtml, черновики скриншотов `first-run-dialog[0-9]*.png`, копии
-  `*grades*.xlsx`, `.codegraph/`, `.reasonix/`, `reasonix.toml`, собранный `*.zip`) внесён
-  в `.gitignore`.
+- В `.gitignore` внесены копии результатов (`*grades*.xlsx`), черновики скриншотов
+  (`first-run-dialog[0-9]*.png`), собранный дистрибутив (`dnevnik-mesh-export.zip`)
+  и Excel-локи (`~$*.xlsx`). Рабочая копия при этом чистая — лишнего в `git status` нет.
+- Временные материалы (папка `1/` с mhtml, логи проверок, черновики скриншотов) удалены
+  05.10.2026; нужное из них описано в этом файле. Копия старого результата
+  `2025_grades — копия.xlsx` оставлена намеренно.
