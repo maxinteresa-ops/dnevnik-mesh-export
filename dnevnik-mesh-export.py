@@ -17,7 +17,6 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from urllib.request import Request, urlopen
-from urllib.error import URLError
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -46,6 +45,11 @@ except ImportError:
 API_URL = "https://school.mos.ru"
 CHROME_DEBUG_URL = "http://127.0.0.1:9222"
 WEEK_COUNT = 38
+
+# Повторы запроса к API: МЭШ иногда отвечает HTTP 500 или не отвечает вовсе.
+# Без повторов оценки за такую неделю терялись молча.
+REQUEST_ATTEMPTS = 3
+REQUEST_RETRY_DELAY = 3  # секунд между попытками
 
 # Возможные имена поля с коэффициентом (весом) оценки в ответе API.
 # МЭШ показывает коэффициент только когда он больше 1, поэтому отсутствие
@@ -207,7 +211,7 @@ def get_profile(token, cookie_str):
 
 
 def get_marks(token, cookie_str, student_id, from_date, to_date):
-    """Оценки за период. Пустой список — оценок нет, None — запрос не удался."""
+    """Оценки за период. Пустой список — оценок нет, None — запрос не удался после повторов."""
     url = f"{API_URL}/api/family/web/v1/marks?student_id={student_id}&from={from_date}&to={to_date}"
     headers = {
         "Accept": "application/json, text/plain, */*",
@@ -218,23 +222,26 @@ def get_marks(token, cookie_str, student_id, from_date, to_date):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Cookie": cookie_str,
     }
-    req = Request(url, headers=headers, method="GET")
-    try:
-        resp = urlopen(req, timeout=15)
-        data = json.loads(resp.read().decode())
-        return data.get("payload", [])
-    except URLError as e:
-        log_exception(f"get_marks({from_date}..{to_date}): HTTP error")
-        print(f"  HTTP ошибка {from_date}..{to_date}: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        log_exception(f"get_marks({from_date}..{to_date}): JSON decode")
-        print(f"  JSON ошибка {from_date}..{to_date}: {e}")
-        return None
-    except Exception as e:
-        log_exception(f"get_marks({from_date}..{to_date})")
-        print(f"  Ошибка запроса {from_date}..{to_date}: {e}")
-        return None
+
+    for attempt in range(1, REQUEST_ATTEMPTS + 1):
+        try:
+            req = Request(url, headers=headers, method="GET")
+            resp = urlopen(req, timeout=15)
+            data = json.loads(resp.read().decode())
+            return data.get("payload", [])
+        except Exception as e:
+            if attempt < REQUEST_ATTEMPTS:
+                # Сбой разовый (HTTP 500, таймаут) — пробуем ещё раз.
+                print(f"  Сбой запроса {from_date}..{to_date}: {e} — "
+                      f"повтор {attempt + 1}/{REQUEST_ATTEMPTS} через {REQUEST_RETRY_DELAY} с")
+                time.sleep(REQUEST_RETRY_DELAY)
+            else:
+                log_exception(f"get_marks({from_date}..{to_date}): "
+                              f"не удалось за {REQUEST_ATTEMPTS} попытки")
+                print(f"  Ошибка запроса {from_date}..{to_date}: {e} "
+                      f"(после {REQUEST_ATTEMPTS} попыток)")
+
+    return None
 
 
 def fmt_date(d):

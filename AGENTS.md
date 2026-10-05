@@ -32,6 +32,8 @@ Windows-утилита: собирает все оценки за текущий
    `session-cookie`, `JSESSIONID`, `student_person_id`, `active_student`, `cluster_id`, `aupd_token` и др.
 4. **API** через `urllib` с заголовком `X-Mes-Subsystem: familyweb`:
    `/api/family/web/v1/profile` → дети, `/api/family/web/v1/marks?student_id=&from=&to=` → оценки.
+   Запрос повторяется до `REQUEST_ATTEMPTS` (3) раз с паузой `REQUEST_RETRY_DELAY` (3 с):
+   МЭШ иногда отвечает HTTP 500 или не отвечает вовсе, без повторов неделя терялась молча.
 5. **Сбор**: `YEARS_TO_COLLECT` учебных годов, по умолчанию **1** (только текущий — почему,
    см. «Что известно про API МЭШ»). Текущий уч. год определяется автоматом по дате:
    `_year = now.year`, если месяц ≥ 9, иначе `now.year - 1`; диапазоны годов строятся как
@@ -64,10 +66,30 @@ Windows-утилита: собирает все оценки за текущий
 
 ## Сборка
 
-```bash
-pip install openpyxl websocket-client pyinstaller
-pyinstaller --onefile --console --distpath . --name dnevnik-mesh-export dnevnik-mesh-export.py
+Зависимости для сборки: `pip install openpyxl websocket-client pyinstaller`.
+
+Собирать **обязательно со списком `--exclude-module`**: без него PyInstaller затягивает
+в exe случайные пакеты из окружения (numpy с OpenBLAS, Pillow, lxml, psutil, pyreadline3,
+pywin32, PyYAML, charset_normalizer) — сборка раздувается с ~9,4 МБ до ~31 МБ.
+Проверено 05.10.2026: в архиве сборки без исключений лежало ~17 МБ неиспользуемых пакетов.
+
+```powershell
+$ex = 'numpy','PIL','lxml','psutil','yaml','pyreadline3','win32','win32com','pythoncom','pywintypes',
+      'charset_normalizer','requests','tkinter','unittest','pydoc','doctest','sqlite3','xmlrpc',
+      'http.server','socketserver','cgi','multiprocessing','asyncio','concurrent','distutils',
+      'setuptools','pkg_resources','pip','IPython','pytest','pandas','matplotlib','scipy','mypy'
+$a = '--onefile','--console','--noconfirm','--distpath','.','--name','dnevnik-mesh-export'
+foreach ($m in $ex) { $a += @('--exclude-module', $m) }
+$a += 'dnevnik-mesh-export.py'
+python -m PyInstaller @a
 ```
+
+Нельзя исключать `email` (его использует `http.client` при HTTPS-запросах) и `ssl`/`_socket`/
+`_hashlib` (нужны для HTTPS и CDP). После сборки проверяйте содержимое:
+`python -m PyInstaller.utils.cliutils.archive_viewer -r -l dnevnik-mesh-export.exe`
+(не должно быть numpy/PIL/lxml, должны быть openpyxl и websocket).
+
+Дистрибутив: `Compress-Archive -Path dnevnik-mesh-export.exe -DestinationPath dnevnik-mesh-export.zip -Force`.
 
 ## Что известно про API МЭШ
 
@@ -95,10 +117,9 @@ pyinstaller --onefile --console --distpath . --name dnevnik-mesh-export dnevnik-
 
 - Пивот сортирует оценки как числа, нечисловые — после цифр (`x.isdigit()`).
 - Запись колонок ограничена 90-й (`chr(64 + idx)`).
-- Сбор строго последовательный, без ретраев на уровне запроса; хардкод `WEEK_COUNT = 38`.
-  На живом запуске 04.10.2026 отдельные недели отдали HTTP 500 / таймаут — теперь такие недели
-  видно в консоли и статистике («Недель не загружено»), но оценки за них всё равно теряются,
-  повторной попытки нет.
+- Сбор строго последовательный, хардкод `WEEK_COUNT = 38` (без повторов, если задать
+  `REQUEST_ATTEMPTS = 1`). Неделя, которую не удалось загрузить за все попытки, попадает
+  в статистику «Недель не загружено», но оценки за неё теряются.
 - Автотестов нет: проверка — ручной запуск с готовым `chrome-profile/` и просмотр `grades.xlsx`.
 
 ## Правила работы
@@ -109,4 +130,8 @@ pyinstaller --onefile --console --distpath . --name dnevnik-mesh-export dnevnik-
 
 ## Заметки по рабочей копии
 
-- URL `origin` содержит GitHub-токен в открытом виде — заменить на SSH или перевыпустить токен.
+- URL `origin` — обычный `https://github.com/maxinteresa-ops/dnevnik-mesh-export.git`,
+  токен из него убран (05.10.2026). Пуш идёт через `gh` / Git Credential Manager.
+- Мусор (папка `1/` с mhtml, черновики скриншотов `first-run-dialog[0-9]*.png`, копии
+  `*grades*.xlsx`, `.codegraph/`, `.reasonix/`, `reasonix.toml`, собранный `*.zip`) внесён
+  в `.gitignore`.

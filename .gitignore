@@ -1,6 +1,18 @@
 # Результаты
 grades.xlsx
+*grades*.xlsx
 marks_api_response.*
+~$*.xlsx
+
+# Дистрибутив (публикуется в релизах, в репозитории не нужен)
+dnevnik-mesh-export.zip
+first-run-dialog[0-9]*.png
+
+# Локальные материалы и инструменты
+1/
+.codegraph/
+.reasonix/
+reasonix.toml
 
 # Python
 __pycache__/
