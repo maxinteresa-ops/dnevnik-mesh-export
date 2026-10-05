@@ -42,6 +42,10 @@
 Файл `grades.xlsx` появится рядом с программой.
 
 **Сколько ждать?** Обычно 10 секунд на сбор всех 38 учебных недель.
+<img width="1115" height="628" alt="image" src="https://github.com/user-attachments/assets/a8fbf6bd-7fb5-463d-b22c-65010ccb5cad" />
+<img width="1713" height="685" alt="image" src="https://github.com/user-attachments/assets/07d9e1e7-fd0a-4895-8da5-cfe41432c7b0" />
+
+
 
 ## 👨‍👩‍👧‍👦 Для родителей с несколькими детьми
 
@@ -87,7 +91,7 @@
 
 Нажмите **«Не входить»** — аккаунт Google не нужен, программа работает без него:
 
-<a href="first-run-dialog.png" target="_blank"><img src="first-run-dialog.png" width="400" alt="Не входить"></a>
+<a href="first-run-dialog.png" target="_blank"><img width="600" alt="image" src="https://github.com/user-attachments/assets/ff48158b-6681-4930-8ce2-6af318b92ec6" alt="Не входить" /></a>
 </details>
 
 ## 🛠 Сборка из исходников
